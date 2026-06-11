@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Road-Network Christofides — Field Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<style>
+  :root {
+    --paper:      #f3ecdc;
+    --paper-2:    #ebe1c9;
+    --card:       #faf4e4;
+    --ink:        #1c1a15;
+    --ink-soft:   #3a362d;
+    --muted:      #6e6655;
+    --rule:       #a79977;
+    --rule-soft:  #c7ba9a;
+    --blue:       #1e4d8c;
+    --green:      #2f5d3e;
+    --orange:     #9c4a1b;
+    --purple:     #5d3a8c;
+    --yellow:     #a07b1a;
+    --red:        #8b1a1a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "EB Garamond", Georgia, "Times New Roman", serif;
+    font-size: 16px;
+    overflow: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(180,160,110,0.08), transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(160,140,100,0.07), transparent 40%);
+    pointer-events: none; z-index: 0;
+  }
+  .app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: 100vh; width: 100vw;
+  }
+  .panel {
+    background: var(--paper-2);
+    border-right: 1.5px solid var(--rule);
+    padding: 24px 26px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .panel::-webkit-scrollbar { width: 8px; }
+  .panel::-webkit-scrollbar-thumb { background: var(--rule-soft); border-radius: 4px; }
+
+  .masthead { border-bottom: 2px double var(--rule); padding-bottom: 14px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-family: "EB Garamond", Georgia, serif;
+    font-weight: 500; font-size: 23px; line-height: 1.15;
+    margin: 0; color: var(--ink);
+  }
+  h1 em { font-style: italic; font-weight: 400; }
+  .back-link {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 13px; font-style: italic;
+    color: var(--muted); text-decoration: none;
+    display: inline-block; margin-bottom: 4px;
+  }
+  .back-link:hover { color: var(--ink); }
+
+  .section {
+    background: var(--card);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 14px 16px 16px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+  }
+  .section h2 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--muted);
+    margin: 0 0 10px 0; font-weight: 500;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 5px;
+  }
+
+  button {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 14px; width: 100%;
+    padding: 7px 10px;
+    border-radius: 2px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer; font-weight: 500;
+    transition: background 120ms, color 120ms, transform 80ms;
+  }
+  button:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.38; cursor: not-allowed; }
+  button.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  button.primary:hover:not(:disabled) { background: var(--ink-soft); }
+  button.accent {
+    background: var(--paper); color: var(--ink);
+    border: 1.5px solid var(--ink);
+    font-variant: small-caps; letter-spacing: 0.05em;
+  }
+  button.tiny {
+    font-size: 12.5px; padding: 5px 8px; width: auto;
+    font-style: italic;
+  }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; }
+
+  .mode-switch {
+    display: flex; gap: 0; border: 1px solid var(--ink);
+    border-radius: 2px; overflow: hidden; margin-bottom: 10px;
+  }
+  .mode-switch button {
+    border: none; border-radius: 0;
+    background: var(--paper); color: var(--ink);
+    font-size: 13px; padding: 6px 4px;
+    font-variant: small-caps; letter-spacing: 0.04em;
+    flex: 1;
+  }
+  .mode-switch button.active {
+    background: var(--ink); color: var(--paper);
+  }
+  .mode-switch button + button { border-left: 1px solid var(--rule-soft); }
+
+  .hint {
+    font-size: 12px; color: var(--muted);
+    font-style: italic; line-height: 1.45;
+    margin-top: 6px;
+  }
+
+  .pts-list {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    max-height: 140px; overflow-y: auto;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 3px 10px;
+    padding-right: 2px;
+  }
+  .pts-list::-webkit-scrollbar { width: 6px; }
+  .pts-list::-webkit-scrollbar-thumb { background: var(--rule-soft); }
+  .pts-list .k { color: var(--ink); }
+  .pts-list .v { color: var(--muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pts-list .del {
+    cursor: pointer; color: var(--red);
+    font-family: "EB Garamond", Georgia, serif;
+    font-style: italic; font-size: 12px;
+  }
+  .pts-list .del:hover { text-decoration: underline; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+  }
+  .stats .k { color: var(--muted); }
+  .stats .v { color: var(--ink); text-align: right; font-weight: 500; }
+
+  .violations {
+    max-height: 130px; overflow-y: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px; line-height: 1.55;
+    color: var(--ink-soft);
+    border-left: 2px solid var(--red);
+    padding: 4px 8px;
+    background: rgba(139, 26, 26, 0.04);
+    margin-top: 6px;
+  }
+  .violations::-webkit-scrollbar { width: 6px; }
+  .violations::-webkit-scrollbar-thumb { background: var(--rule-soft); }
+  .violations b { color: var(--red); font-weight: 500; }
+
+  .info-title {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 15.5px; font-weight: 500; font-style: italic;
+    color: var(--ink); margin-bottom: 6px; line-height: 1.3;
+  }
+  .info-desc {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 13.5px; color: var(--ink-soft);
+    line-height: 1.55;
+    max-height: 160px; overflow-y: auto;
+    padding: 6px 0 6px 12px;
+    border-left: 2px solid var(--rule);
+    text-align: justify;
+  }
+  .info-desc::-webkit-scrollbar { width: 6px; }
+  .info-desc::-webkit-scrollbar-thumb { background: var(--rule-soft); }
+
+  .step-counter {
+    text-align: center;
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  .map-wrap {
+    position: relative;
+    background: var(--paper-2);
+  }
+  #map {
+    position: absolute; inset: 0;
+    background: var(--paper-2);
+  }
+  /* paper-tinted corners */
+  #map::before {
+    content: ""; position: absolute; inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 2px rgba(28,26,21,0.08);
+    z-index: 400;
+  }
+
+  .map-badge {
+    position: absolute;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 12px; font-style: italic;
+    color: var(--muted);
+    background: rgba(250,244,228,0.92);
+    border: 1px solid var(--rule-soft);
+    padding: 4px 14px;
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  .map-badge b {
+    font-style: normal; font-variant: small-caps;
+    letter-spacing: 0.06em; color: var(--ink);
+    margin-right: 6px;
+  }
+
+  /* custom divIcon markers */
+  .chk-marker {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #2b2a26;
+    color: #faf4e4;
+    border: 2px solid #1c1a15;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 14px; font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  }
+  .chk-marker.visited { background: #8a8578; }
+  .chk-marker.odd     { background: var(--orange); }
+  .chk-marker.active  { background: var(--yellow); border-color: #1c1a15; }
+  .chk-marker.endpoint { background: var(--red); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <div class="masthead">
+      <a class="back-link" href="/">← back to monograph</a>
+      <div class="eyebrow">Chapter III · Field Study</div>
+      <h1>Christofides on a <em>Real Road Network</em></h1>
+    </div>
+
+    <div class="section">
+      <h2>§ Mode</h2>
+      <div class="mode-switch">
+        <button id="modeAdd"    class="active" type="button">Add checkpoint</button>
+        <button id="modeInspect" type="button">Inspect route</button>
+      </div>
+      <div class="hint" id="modeHint">
+        Click the map to drop a checkpoint. Up to <b>n = 20</b>. These are the
+        vertices on which we will run Christofides using OSRM driving
+        distances.
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>§ Checkpoints <span id="ptsCount" style="float:right;font-family:'IBM Plex Mono',monospace;font-weight:400;color:var(--ink);letter-spacing:0">0 / 20</span></h2>
+      <div class="pts-list" id="ptsList"></div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button id="clearBtn" class="tiny">Clear all</button>
+        <button id="undoBtn"  class="tiny">Remove last</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>§ Compute</h2>
+      <button id="fetchMatrixBtn" class="primary">Fetch OSRM distance matrix</button>
+      <div style="height:6px"></div>
+      <button id="runBtn" class="accent" disabled>Run Christofides</button>
+      <div class="hint" id="computeHint">
+        First fetch the driving-distance matrix; then run Christofides on the
+        symmetrized matrix D′(i,j) = min(d(i,j), d(j,i)).
+      </div>
+    </div>
+
+    <div class="section" id="inspectSection" style="display:none">
+      <h2>§ Inspect Route</h2>
+      <div class="hint" id="inspectHint">
+        Click a checkpoint on the map (origin, red), then a second one
+        (destination, red). We'll draw the actual driving route and report
+        its length in both directions.
+      </div>
+      <div class="stats" id="inspectStats" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section" id="playbackSection" style="display:none">
+      <h2>§ Playback</h2>
+      <div class="step-counter" id="stepCounter">step — of —</div>
+      <div class="row">
+        <button id="prevBtn" disabled>◂ Prev.</button>
+        <button id="nextBtn" disabled>Next ▸</button>
+      </div>
+    </div>
+
+    <div class="section" id="commentarySection" style="display:none">
+      <h2>§ Commentary</h2>
+      <div class="info-title" id="stepTitle">—</div>
+      <div class="info-desc"  id="stepDesc">—</div>
+    </div>
+
+    <div class="section" id="statsSection" style="display:none">
+      <h2>§ Numerical Summary</h2>
+      <div class="stats" id="statsBox"></div>
+    </div>
+
+    <div class="section" id="violSection" style="display:none">
+      <h2>§ Non-Metric Diagnostics</h2>
+      <div class="stats" id="violStats"></div>
+      <div id="triList" class="violations" style="display:none"></div>
+      <div style="height:8px"></div>
+      <div id="asymList" class="violations" style="display:none"></div>
+    </div>
+
+    <div class="section" id="exportSection" style="display:none">
+      <h2>§ Export for the Driver</h2>
+      <button id="downloadGpxBtn">⤓ Download .gpx (GPS)</button>
+      <div style="height:6px"></div>
+      <button id="downloadCsvBtn">⤓ Download .csv (waypoints)</button>
+      <div style="height:6px"></div>
+      <button id="openMapsBtn">↗ Open in Google Maps</button>
+    </div>
+  </aside>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-badge"><b>Fig. 3.</b> OpenStreetMap · OSRM driving profile.</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+/* ==========================================================================
+   Palette (mirrors the backend)
+   ========================================================================== */
+const C = {
+  blue:   "#1e4d8c",
+  green:  "#2f5d3e",
+  orange: "#9c4a1b",
+  purple: "#5d3a8c",
+  yellow: "#a07b1a",
+  red:    "#8b1a1a",
+  ink:    "#1c1a15",
+};
+
+/* ==========================================================================
+   Leaflet setup
+   ========================================================================== */
+const map = L.map("map", { zoomControl: true }).setView([45.7489, 21.2087], 13); // default: Timișoara
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap contributors',
+}).addTo(map);
+
+/* ==========================================================================
+   State
+   ========================================================================== */
+const state = {
+  mode: "add",        // "add" | "inspect"
+  points: [],         // [{lat, lng, marker}]
+  matrix: null,       // asymmetric OSRM matrix (meters)
+  durations: null,
+  steps: [],
+  currentStep: -1,
+  result: null,       // solve result
+  inspectPick: [],    // indices of currently selected inspect endpoints
+  // rendered layers
+  stepLayer: L.layerGroup().addTo(map),
+  finalRouteLayer: L.layerGroup().addTo(map),
+  inspectLayer: L.layerGroup().addTo(map),
+};
+
+/* ==========================================================================
+   Marker rendering
+   ========================================================================== */
+function makeIcon(label, kind) {
+  const cls = "chk-marker" + (kind ? " " + kind : "");
+  return L.divIcon({
+    className: "chk-icon-wrap",
+    html: `<div class="${cls}">${label}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function rerenderMarkers(kindById) {
+  kindById = kindById || {};
+  for (let i = 0; i < state.points.length; i++) {
+    const p = state.points[i];
+    const kind = kindById[i] || "";
+    p.marker.setIcon(makeIcon(String(i), kind));
+  }
+}
+
+function addPoint(latlng) {
+  if (state.points.length >= 20) return;
+  const idx = state.points.length;
+  const marker = L.marker(latlng, {
+    icon: makeIcon(String(idx), ""),
+    draggable: false,
+    keyboard: false,
+  }).addTo(map);
+  marker.on("click", () => onMarkerClick(idx));
+  state.points.push({ lat: latlng.lat, lng: latlng.lng, marker });
+  invalidateMatrix();
+  renderPointsList();
+  updateButtons();
+}
+
+function removePointAt(idx) {
+  const p = state.points[idx];
+  if (!p) return;
+  map.removeLayer(p.marker);
+  state.points.splice(idx, 1);
+  // re-number remaining markers
+  for (let i = 0; i < state.points.length; i++) {
+    state.points[i].marker.setIcon(makeIcon(String(i), ""));
+  }
+  invalidateMatrix();
+  renderPointsList();
+  updateButtons();
+}
+
+function clearPoints() {
+  for (const p of state.points) map.removeLayer(p.marker);
+  state.points = [];
+  invalidateMatrix();
+  renderPointsList();
+  updateButtons();
+}
+
+function invalidateMatrix() {
+  state.matrix = null;
+  state.durations = null;
+  state.steps = [];
+  state.currentStep = -1;
+  state.result = null;
+  state.stepLayer.clearLayers();
+  state.finalRouteLayer.clearLayers();
+  inspectReset();
+  hide("playbackSection");
+  hide("commentarySection");
+  hide("statsSection");
+  hide("violSection");
+  hide("exportSection");
+  runBtn.disabled = true;
+}
+
+/* ==========================================================================
+   Mode handling
+   ========================================================================== */
+const modeAdd     = document.getElementById("modeAdd");
+const modeInspect = document.getElementById("modeInspect");
+const modeHint    = document.getElementById("modeHint");
+const inspectSection = document.getElementById("inspectSection");
+
+function setMode(m) {
+  state.mode = m;
+  modeAdd.classList.toggle("active", m === "add");
+  modeInspect.classList.toggle("active", m === "inspect");
+  if (m === "add") {
+    modeHint.innerHTML = "Click the map to drop a checkpoint. Up to <b>n = 20</b>.";
+    inspectSection.style.display = "none";
+    inspectReset();
+  } else {
+    modeHint.innerHTML = "Click two <b>existing</b> checkpoints to trace the actual driving route.";
+    inspectSection.style.display = "block";
+  }
+}
+modeAdd.addEventListener("click", () => setMode("add"));
+modeInspect.addEventListener("click", () => setMode("inspect"));
+
+/* ==========================================================================
+   Map clicks
+   ========================================================================== */
+map.on("click", (e) => {
+  if (state.mode === "add") addPoint(e.latlng);
+});
+
+function onMarkerClick(idx) {
+  if (state.mode !== "inspect") return;
+  state.inspectPick.push(idx);
+  if (state.inspectPick.length > 2) state.inspectPick = [idx];
+  rerenderMarkers(Object.fromEntries(state.inspectPick.map(i => [i, "endpoint"])));
+  if (state.inspectPick.length === 2) {
+    runInspect(state.inspectPick[0], state.inspectPick[1]);
+  }
+}
+
+function inspectReset() {
+  state.inspectPick = [];
+  state.inspectLayer.clearLayers();
+  rerenderMarkers();
+  document.getElementById("inspectStats").innerHTML = "";
+  document.getElementById("inspectHint").innerHTML =
+    "Click a checkpoint on the map (origin, red), then a second one " +
+    "(destination, red). We'll draw the actual driving route and report " +
+    "its length in both directions.";
+}
+
+async function runInspect(a, b) {
+  const hint = document.getElementById("inspectHint");
+  hint.innerHTML = "Fetching driving routes (both directions)…";
+  state.inspectLayer.clearLayers();
+  try {
+    const [fwd, bwd] = await Promise.all([
+      fetchRoute([state.points[a], state.points[b]]),
+      fetchRoute([state.points[b], state.points[a]]),
+    ]);
+    // forward — purple
+    L.polyline(fwd.polyline, { color: C.purple, weight: 5, opacity: 0.95 }).addTo(state.inspectLayer);
+    // backward — orange, slightly dashed & thinner
+    L.polyline(bwd.polyline, { color: C.orange, weight: 4, opacity: 0.9, dashArray: "8 5" }).addTo(state.inspectLayer);
+
+    const km = (m) => (m / 1000).toFixed(2) + " km";
+    const min = (s) => (s / 60).toFixed(1) + " min";
+    const asym = Math.abs(fwd.distance_m - bwd.distance_m) / Math.max(fwd.distance_m, bwd.distance_m);
+    document.getElementById("inspectStats").innerHTML = `
+      <div class="k">${a} → ${b} (purple)</div><div class="v">${km(fwd.distance_m)} · ${min(fwd.duration_s)}</div>
+      <div class="k">${b} → ${a} (orange, dashed)</div><div class="v">${km(bwd.distance_m)} · ${min(bwd.duration_s)}</div>
+      <div class="k">Asymmetry</div><div class="v">${(asym*100).toFixed(2)} %</div>
+    `;
+    hint.innerHTML = "Click another pair, or switch back to <em>Add checkpoint</em>.";
+  } catch (err) {
+    hint.innerHTML = "<b style='color:var(--red)'>Route fetch failed:</b> " + err.message;
+  }
+}
+
+async function fetchRoute(pts) {
+  const res = await fetch("/map_route", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ points: pts.map(p => ({lat: p.lat, lng: p.lng})) }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+/* ==========================================================================
+   Points list + buttons
+   ========================================================================== */
+const ptsList = document.getElementById("ptsList");
+const ptsCount = document.getElementById("ptsCount");
+const clearBtn = document.getElementById("clearBtn");
+const undoBtn  = document.getElementById("undoBtn");
+const fetchMatrixBtn = document.getElementById("fetchMatrixBtn");
+const runBtn   = document.getElementById("runBtn");
+
+function renderPointsList() {
+  ptsList.innerHTML = "";
+  ptsCount.textContent = `${state.points.length} / 20`;
+  for (let i = 0; i < state.points.length; i++) {
+    const p = state.points[i];
+    const k = document.createElement("div");
+    k.className = "k";
+    k.textContent = String(i);
+    const v = document.createElement("div");
+    v.className = "v";
+    v.textContent = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+    const d = document.createElement("div");
+    d.className = "del";
+    d.textContent = "×";
+    d.title = "remove";
+    d.onclick = () => removePointAt(i);
+    ptsList.appendChild(k);
+    ptsList.appendChild(v);
+    ptsList.appendChild(d);
+  }
+}
+
+function updateButtons() {
+  fetchMatrixBtn.disabled = state.points.length < 2;
+  runBtn.disabled = !state.matrix || state.points.length < 3;
+}
+
+clearBtn.addEventListener("click", clearPoints);
+undoBtn .addEventListener("click", () => removePointAt(state.points.length - 1));
+
+/* ==========================================================================
+   Fetch distance matrix
+   ========================================================================== */
+fetchMatrixBtn.addEventListener("click", async () => {
+  fetchMatrixBtn.disabled = true;
+  const orig = fetchMatrixBtn.textContent;
+  fetchMatrixBtn.textContent = "Fetching…";
+  try {
+    const res = await fetch("/map_distances", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        points: state.points.map(p => ({lat: p.lat, lng: p.lng})),
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    state.matrix = data.distances;
+    state.durations = data.durations;
+    document.getElementById("computeHint").innerHTML =
+      `Got <b>${data.n} × ${data.n}</b> distance matrix from OSRM. ` +
+      "Now press <em>Run Christofides</em>.";
+    runBtn.disabled = state.points.length < 3;
+  } catch (err) {
+    document.getElementById("computeHint").innerHTML =
+      "<b style='color:var(--red)'>Failed:</b> " + err.message;
+  } finally {
+    fetchMatrixBtn.disabled = false;
+    fetchMatrixBtn.textContent = orig;
+  }
+});
+
+/* ==========================================================================
+   Run Christofides
+   ========================================================================== */
+runBtn.addEventListener("click", async () => {
+  if (!state.matrix || state.points.length < 3) return;
+  const orig = runBtn.textContent;
+  runBtn.disabled = true;
+  runBtn.textContent = "Solving…";
+  try {
+    const res = await fetch("/map_solve", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        points: state.points.map(p => ({lat: p.lat, lng: p.lng})),
+        matrix: state.matrix,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    state.steps  = data.steps;
+    state.result = data;
+    show("playbackSection");
+    show("commentarySection");
+    show("statsSection");
+    show("violSection");
+    showStep(0);
+    renderStats(data);
+    renderViolations(data);
+    await fetchFinalRoute();
+    show("exportSection");
+  } catch (err) {
+    document.getElementById("computeHint").innerHTML =
+      "<b style='color:var(--red)'>Solve failed:</b> " + err.message;
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = orig;
+  }
+});
+
+/* ==========================================================================
+   Step rendering
+   ========================================================================== */
+const stepCounter = document.getElementById("stepCounter");
+const stepTitle   = document.getElementById("stepTitle");
+const stepDesc    = document.getElementById("stepDesc");
+const prevBtn     = document.getElementById("prevBtn");
+const nextBtn     = document.getElementById("nextBtn");
+
+prevBtn.addEventListener("click", () => showStep(state.currentStep - 1));
+nextBtn.addEventListener("click", () => showStep(state.currentStep + 1));
+
+function drawStep(step) {
+  state.stepLayer.clearLayers();
+  if (!step) return;
+  const pts = state.points;
+  // edges as straight lines between markers
+  for (const e of step.edges) {
+    const a = pts[e.from], b = pts[e.to];
+    if (!a || !b) continue;
+    const opts = {
+      color: e.color,
+      weight: e.width,
+      opacity: 0.92,
+      dashArray: e.dashed ? "8 6" : null,
+    };
+    const poly = L.polyline([[a.lat, a.lng], [b.lat, b.lng]], opts)
+                  .addTo(state.stepLayer);
+    if (e.label) {
+      poly.bindTooltip(e.label, {
+        permanent: true, direction: "center", className: "edge-label",
+        offset: [0, 0],
+      });
+    }
+  }
+  // recolor markers
+  const kinds = {};
+  for (const idx of (step.highlight_nodes || [])) kinds[idx] = "active";
+  rerenderMarkers(kinds);
+}
+
+function showStep(i) {
+  if (i < 0 || i >= state.steps.length) return;
+  state.currentStep = i;
+  const s = state.steps[i];
+  drawStep(s);
+  stepTitle.textContent = s.title;
+  stepDesc.textContent  = s.description;
+  stepCounter.textContent = `step ${i + 1} of ${state.steps.length}`;
+  prevBtn.disabled = i <= 0;
+  nextBtn.disabled = i >= state.steps.length - 1;
+}
+
+/* ==========================================================================
+   Final Hamiltonian route on real roads
+   ========================================================================== */
+async function fetchFinalRoute() {
+  state.finalRouteLayer.clearLayers();
+  const ham = state.result.hamiltonian;
+  const pts = ham.map(i => state.points[i]);
+  try {
+    const data = await fetchRoute(pts);
+    L.polyline(data.polyline, {
+      color: C.purple, weight: 5, opacity: 0.85,
+    }).addTo(state.finalRouteLayer);
+    // Fit map to final route
+    const bounds = L.latLngBounds(data.polyline);
+    map.fitBounds(bounds, { padding: [40, 40] });
+    // stash the driven distance for reporting
+    state.result.driven_route = {
+      distance_m: data.distance_m, duration_s: data.duration_s,
+      polyline: data.polyline,
+    };
+    renderStats(state.result);
+  } catch (err) {
+    console.warn("final route fetch failed:", err);
+  }
+}
+
+/* ==========================================================================
+   Stats / violations
+   ========================================================================== */
+function renderStats(data) {
+  const b = document.getElementById("statsBox");
+  const km = (m) => (m / 1000).toFixed(3) + " km";
+  const rows = [];
+  rows.push(["n (checkpoints)", data.stats.n]);
+  rows.push(["MST lower bound ℓ(T)", km(data.stats.mst_cost_m)]);
+  rows.push(["Matching cost ℓ(M)",    km(data.stats.matching_cost_m)]);
+  rows.push(["Tour cost (symmetrized)", km(data.stats.ham_cost_sym_m)]);
+  if (data.stats.ham_cost_real_m !== null && data.stats.ham_cost_real_m !== undefined) {
+    rows.push(["Tour cost (directional re-price)", km(data.stats.ham_cost_real_m)]);
+  }
+  if (data.driven_route) {
+    rows.push(["Driven distance (real roads)", km(data.driven_route.distance_m)]);
+    rows.push(["Driven duration", (data.driven_route.duration_s/60).toFixed(1) + " min"]);
+  }
+  const triCount = data.triangle_violations?.count || 0;
+  const asymCount = data.asymmetries?.count || 0;
+  rows.push(["Triangle-ineq. violations", triCount]);
+  rows.push(["Asymmetric pairs", asymCount]);
+  const guarantee = (triCount === 0)
+    ? "≤ 3/2 · OPT (metric ⇒ guarantee holds)"
+    : "⚠ does NOT apply (non-metric)";
+  rows.push(["Christofides guarantee", guarantee]);
+
+  b.innerHTML = "";
+  for (const [k, v] of rows) {
+    const kd = document.createElement("div"); kd.className = "k"; kd.textContent = k;
+    const vd = document.createElement("div"); vd.className = "v"; vd.textContent = String(v);
+    b.appendChild(kd); b.appendChild(vd);
+  }
+}
+
+function renderViolations(data) {
+  const vs = document.getElementById("violStats");
+  const tri = data.triangle_violations || { count: 0, total_triples: 0, worst: null, samples: [] };
+  const asym = data.asymmetries || { count: 0, worst: null, samples: [] };
+  const rows = [];
+  rows.push(["Triangle violations", `${tri.count} / ${tri.total_triples}`]);
+  if (tri.worst) rows.push(["Worst triangle ratio", tri.worst.ratio.toFixed(3)]);
+  rows.push(["Asymmetric pairs", asym.count]);
+  if (asym.worst) rows.push(["Worst asymmetry", (asym.worst.rel_diff * 100).toFixed(2) + " %"]);
+  vs.innerHTML = "";
+  for (const [k, v] of rows) {
+    const kd = document.createElement("div"); kd.className = "k"; kd.textContent = k;
+    const vd = document.createElement("div"); vd.className = "v"; vd.textContent = String(v);
+    vs.appendChild(kd); vs.appendChild(vd);
+  }
+
+  const tl = document.getElementById("triList");
+  if (tri.count > 0 && tri.samples.length > 0) {
+    tl.style.display = "block";
+    let html = "<b>Triangle-inequality violations found:</b><br/>";
+    for (const s of tri.samples) {
+      html += `&nbsp;• d(${s.i},${s.k}) = ${s.dik} &nbsp;>&nbsp; via ${s.j}: ${s.via_j} &nbsp;(×${s.ratio})<br/>`;
+    }
+    if (tri.count > tri.samples.length) {
+      html += `&nbsp;… and ${tri.count - tri.samples.length} more.`;
+    }
+    tl.innerHTML = html;
+  } else {
+    tl.style.display = "none";
+  }
+
+  const al = document.getElementById("asymList");
+  if (asym.count > 0 && asym.samples.length > 0) {
+    al.style.display = "block";
+    let html = "<b>Asymmetric pairs (d(i→j) ≠ d(j→i)):</b><br/>";
+    for (const s of asym.samples) {
+      html += `&nbsp;• ${s.i}↔${s.j}: ${s.forward} vs ${s.backward} &nbsp;(Δ ${(s.rel_diff*100).toFixed(1)}%)<br/>`;
+    }
+    if (asym.count > asym.samples.length) {
+      html += `&nbsp;… and ${asym.count - asym.samples.length} more.`;
+    }
+    al.innerHTML = html;
+  } else {
+    al.style.display = "none";
+  }
+}
+
+/* ==========================================================================
+   Export
+   ========================================================================== */
+document.getElementById("downloadGpxBtn").addEventListener("click", () => {
+  if (!state.result) return;
+  const ham = state.result.hamiltonian;
+  const drv = state.result.driven_route;
+  const pts = ham.map(i => state.points[i]);
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<gpx version="1.1" creator="tsp-lab" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+  xml += `  <metadata><name>Christofides tour</name></metadata>\n`;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    xml += `  <wpt lat="${p.lat}" lon="${p.lng}"><name>CP ${ham[i]}</name></wpt>\n`;
+  }
+  xml += `  <trk><name>Christofides driven route</name><trkseg>\n`;
+  const trkPts = (drv && drv.polyline) ? drv.polyline : pts.map(p => [p.lat, p.lng]);
+  for (const [lat, lng] of trkPts) {
+    xml += `    <trkpt lat="${lat}" lon="${lng}"></trkpt>\n`;
+  }
+  xml += `  </trkseg></trk>\n</gpx>\n`;
+  downloadBlob(xml, "christofides_tour.gpx", "application/gpx+xml");
+});
+
+document.getElementById("downloadCsvBtn").addEventListener("click", () => {
+  if (!state.result) return;
+  const ham = state.result.hamiltonian;
+  const legs = state.result.legs || [];
+  let csv = "order,checkpoint_id,lat,lng,leg_sym_m,leg_real_m\n";
+  for (let i = 0; i < ham.length; i++) {
+    const idx = ham[i];
+    const p = state.points[idx];
+    const leg = (i < ham.length - 1) ? legs[i] : null;
+    const sym = leg ? leg.sym_m : "";
+    const real = leg ? (leg.real_m ?? "") : "";
+    csv += `${i},${idx},${p.lat},${p.lng},${sym},${real}\n`;
+  }
+  downloadBlob(csv, "christofides_tour.csv", "text/csv;charset=utf-8;");
+});
+
+document.getElementById("openMapsBtn").addEventListener("click", () => {
+  if (!state.result) return;
+  const ham = state.result.hamiltonian;
+  const pts = ham.map(i => state.points[i]);
+  // Google Maps supports /dir/ with up to ~10 waypoints reliably
+  const parts = pts.map(p => `${p.lat},${p.lng}`);
+  const url = "https://www.google.com/maps/dir/" + parts.join("/");
+  window.open(url, "_blank");
+});
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/* ==========================================================================
+   Helpers
+   ========================================================================== */
+function show(id) { document.getElementById(id).style.display = "block"; }
+function hide(id) { document.getElementById(id).style.display = "none"; }
+
+/* ==========================================================================
+   Tooltip styling for edge labels
+   ========================================================================== */
+const css = document.createElement("style");
+css.textContent = `
+  .leaflet-tooltip.edge-label {
+    background: rgba(250,244,228,0.92);
+    border: 1px solid rgba(28,26,21,0.25);
+    color: var(--ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    padding: 1px 4px;
+    box-shadow: none;
+  }
+  .leaflet-tooltip.edge-label:before { display: none; }
+`;
+document.head.appendChild(css);
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+renderPointsList();
+updateButtons();
+</script>
+</body>
+</html>

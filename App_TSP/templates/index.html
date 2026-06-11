@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Approximation Algorithms for the Traveling Salesman Problem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:      #f3ecdc;
+    --paper-2:    #ebe1c9;
+    --card:       #faf4e4;
+    --ink:        #1c1a15;
+    --ink-soft:   #3a362d;
+    --muted:      #6e6655;
+    --rule:       #a79977;
+    --rule-soft:  #c7ba9a;
+    --blue:       #1e4d8c;
+    --green:      #2f5d3e;
+    --orange:     #9c4a1b;
+    --purple:     #5d3a8c;
+    --yellow:     #a07b1a;
+    --red:        #8b1a1a;
+    --node:       #2b2a26;
+    --canvas-bg:  #faf4e4;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "EB Garamond", "Source Serif Pro", Georgia, "Times New Roman", serif;
+    font-size: 16px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* subtle paper texture */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(180,160,110,0.08), transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(160,140,100,0.07), transparent 40%);
+    pointer-events: none; z-index: 0;
+  }
+  .app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    height: 100vh; width: 100vw;
+  }
+  .panel {
+    background: var(--paper-2);
+    border-right: 1.5px solid var(--rule);
+    padding: 26px 28px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .panel::-webkit-scrollbar { width: 8px; }
+  .panel::-webkit-scrollbar-thumb { background: var(--rule-soft); border-radius: 4px; }
+
+  .masthead {
+    border-bottom: 2px double var(--rule);
+    padding-bottom: 14px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-family: "EB Garamond", Georgia, serif;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 1.15;
+    margin: 0;
+    color: var(--ink);
+    letter-spacing: 0;
+  }
+  h1 em { font-style: italic; font-weight: 400; }
+
+  .section {
+    background: var(--card);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 16px 18px 18px;
+    position: relative;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+  }
+  .section h2 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    margin: 0 0 12px 0;
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 6px;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+    font-style: italic;
+  }
+
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none; appearance: none;
+    height: 3px;
+    background: var(--rule-soft);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--paper-2);
+    cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--ink); border: 2px solid var(--paper-2);
+    cursor: pointer; border-width: 2px;
+  }
+
+  select {
+    font-family: inherit;
+    font-size: 14px;
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    cursor: pointer;
+    outline: none;
+  }
+  select:focus { border-color: var(--ink); }
+
+  button {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 14.5px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 2px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: background 120ms, color 120ms, transform 80ms;
+  }
+  button:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.38; cursor: not-allowed; }
+  button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  button.primary:hover:not(:disabled) { background: var(--ink-soft); border-color: var(--ink-soft); }
+  button.accent {
+    background: var(--paper);
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+    font-variant: small-caps;
+    letter-spacing: 0.05em;
+  }
+  button.accent:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input { flex: 1; }
+  .slider-value {
+    min-width: 32px; text-align: right;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px; color: var(--ink);
+  }
+
+  .step-counter {
+    text-align: center;
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 10px;
+    letter-spacing: 0.05em;
+  }
+  .info-title {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 17px;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--ink);
+    margin-bottom: 8px;
+    line-height: 1.35;
+  }
+  .info-desc {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 8px 0 8px 14px;
+    border-left: 2px solid var(--rule);
+    text-align: justify;
+    hyphens: auto;
+  }
+  .info-desc::-webkit-scrollbar { width: 6px; }
+  .info-desc::-webkit-scrollbar-thumb { background: var(--rule-soft); }
+
+  .stats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+  }
+  .stats .k {
+    color: var(--muted);
+    font-style: normal;
+  }
+  .stats .v {
+    color: var(--ink);
+    text-align: right;
+    font-weight: 500;
+  }
+
+  .swatch {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 1px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    background: var(--canvas-bg);
+    overflow: hidden;
+    border-left: none;
+  }
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    transition: opacity 150ms ease;
+  }
+  canvas.fading { opacity: 0; }
+
+  .figure-caption {
+    position: absolute;
+    bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--muted);
+    text-align: center;
+    background: rgba(250, 244, 228, 0.9);
+    padding: 4px 14px;
+    border-top: 1px solid var(--rule-soft);
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .figure-caption b {
+    font-style: normal;
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    margin-right: 6px;
+  }
+
+  .legend {
+    position: absolute;
+    top: 20px; right: 20px;
+    background: rgba(250, 244, 228, 0.94);
+    border: 1px solid var(--rule-soft);
+    border-radius: 2px;
+    padding: 12px 16px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    display: flex; flex-direction: column; gap: 5px;
+    color: var(--ink-soft);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .legend .lg-title {
+    font-variant: small-caps;
+    letter-spacing: 0.1em;
+    font-size: 9.5px;
+    color: var(--muted);
+    margin-bottom: 3px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .legend .lg-row { display: flex; align-items: center; gap: 8px; }
+  .legend .sw { width: 18px; height: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <div class="masthead">
+      <div class="eyebrow">An Interactive Monograph</div>
+      <h1>Approximation Algorithms for the <em>Traveling Salesman Problem</em></h1>
+    </div>
+
+    <div class="section">
+      <h2>§ Companion Studies</h2>
+      <a href="/simulations" target="_blank" style="text-decoration:none;display:block">
+        <button class="primary" type="button">Empirical Simulator</button>
+      </a>
+      <div style="font-size:12.5px;color:var(--muted);margin:6px 0 10px 0;line-height:1.5;font-style:italic">
+        Run all four heuristics over many random instances and chart the
+        running means of wall-clock time and approximation ratio.
+      </div>
+      <a href="/map" target="_blank" style="text-decoration:none;display:block">
+        <button class="accent" type="button">Real Road-Network Field Study</button>
+      </a>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.5;font-style:italic">
+        Drop checkpoints on OpenStreetMap, fetch driving distances from OSRM,
+        and watch Christofides run on a matrix that is typically <em>not</em>
+        metric — a live illustration of where the 3/2 guarantee breaks down.
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>§ I. Instance</h2>
+      <label for="nodeSlider">Number of vertices n</label>
+      <div class="slider-row">
+        <input id="nodeSlider" type="range" min="5" max="30" value="10" step="1" />
+        <div class="slider-value" id="nodeValue">10</div>
+      </div>
+      <div style="height:10px"></div>
+      <button id="genBtn" class="primary">Sample a random instance</button>
+    </div>
+
+    <div class="section">
+      <h2>§ II. Algorithm</h2>
+      <select id="algoSelect">
+        <option value="nn">Nearest Neighbor</option>
+        <option value="mst">MST 2-Approximation</option>
+        <option value="christofides">Christofides–Serdyukov (3/2)</option>
+        <option value="ni">Nearest Insertion</option>
+      </select>
+      <div style="height:10px"></div>
+      <button id="runBtn" class="accent" disabled>Run</button>
+    </div>
+
+    <div class="section">
+      <h2>§ III. Playback</h2>
+      <div class="step-counter" id="stepCounter">step —&nbsp;&nbsp;of&nbsp;&nbsp;—</div>
+      <div class="row">
+        <button id="prevBtn" disabled>◂ Prev.</button>
+        <button id="nextBtn" disabled>Next ▸</button>
+      </div>
+      <div style="height:8px"></div>
+      <button id="autoBtn" disabled>▸ Auto-play</button>
+      <div style="height:8px"></div>
+      <button id="downloadBtn" class="accent" disabled>⤓ Download figure (PNG)</button>
+      <div style="height:14px"></div>
+      <label for="speedSlider">Interval <span id="speedValue" style="float:right;color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:12px;font-style:normal">1.0 s</span></label>
+      <input id="speedSlider" type="range" min="500" max="2000" value="1000" step="100" />
+    </div>
+
+    <div class="section">
+      <h2>§ IV. Commentary</h2>
+      <div class="info-title" id="stepTitle">Sample an instance to begin.</div>
+      <div class="info-desc" id="stepDesc">Select n above and press <em>Sample a random instance</em>, then choose an algorithm and press <em>Run</em> to walk through its execution.</div>
+    </div>
+
+    <div class="section">
+      <h2>§ V. Numerical Summary</h2>
+      <div class="stats" id="statsBox"></div>
+    </div>
+
+    <div class="section">
+      <h2>§ Shortcut Legend</h2>
+      <div class="stats" style="font-size:12px;">
+        <div class="k"><span class="swatch" style="background:var(--red)"></span>Replaced subpath</div>
+        <div class="v" style="text-align:left;color:var(--muted);font-style:italic">red, dashed</div>
+        <div class="k"><span class="swatch" style="background:var(--yellow)"></span>New direct edge</div>
+        <div class="v" style="text-align:left;color:var(--muted);font-style:italic">ochre</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div class="legend">
+      <div class="lg-title">Figure Key</div>
+      <div class="lg-row"><div class="sw" style="background:var(--blue)"></div>Spanning tree T</div>
+      <div class="lg-row"><div class="sw" style="background:var(--green)"></div>Matching / doubled</div>
+      <div class="lg-row"><div class="sw" style="background:var(--orange)"></div>Eulerian traversal</div>
+      <div class="lg-row"><div class="sw" style="background:var(--purple)"></div>Hamiltonian cycle</div>
+      <div class="lg-row"><div class="sw" style="background:var(--yellow)"></div>Active / shortcut</div>
+    </div>
+    <div class="figure-caption" id="figureCaption"><b>Fig. 1.</b> A random Euclidean instance; faint lines trace the complete graph K<sub>n</sub>.</div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   State
+   ========================================================================== */
+const state = {
+  nodes: [],
+  edges: [],
+  steps: [],
+  currentStep: 0,
+  autoPlayInterval: null,
+  algorithm: "nn",
+  speedMs: 1000,
+  logicalWidth: 800,
+  logicalHeight: 600,
+};
+
+/* ==========================================================================
+   Canvas plumbing
+   ========================================================================== */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+let dpr = window.devicePixelRatio || 1;
+let scaleFactor = 1;
+let offsetX = 0, offsetY = 0;
+
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+
+  const sx = w / state.logicalWidth;
+  const sy = h / state.logicalHeight;
+  scaleFactor = Math.min(sx, sy);
+  offsetX = (w - state.logicalWidth * scaleFactor) / 2;
+  offsetY = (h - state.logicalHeight * scaleFactor) / 2;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  redraw();
+}
+window.addEventListener("resize", resizeCanvas);
+
+function tx(x) { return offsetX + x * scaleFactor; }
+function ty(y) { return offsetY + y * scaleFactor; }
+function ts(v) { return v * scaleFactor; }
+
+/* ==========================================================================
+   Drawing helpers — academic "paper" look
+   ========================================================================== */
+const CANVAS_BG = "#faf4e4";
+const GRID = "rgba(28,26,21,0.06)";
+const FAINT_EDGE = "rgba(28,26,21,0.11)";
+const LABEL_BG = "rgba(250, 244, 228, 0.92)";
+const LABEL_STROKE = "rgba(28, 26, 21, 0.18)";
+
+function drawBackground() {
+  ctx.fillStyle = CANVAS_BG;
+  ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+  // subtle page border
+  ctx.strokeStyle = "rgba(28,26,21,0.08)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(offsetX + 6, offsetY + 6,
+                 state.logicalWidth * scaleFactor - 12,
+                 state.logicalHeight * scaleFactor - 12);
+
+  // light graph-paper grid
+  ctx.strokeStyle = GRID;
+  ctx.lineWidth = 1;
+  const step = 40 * scaleFactor;
+  for (let x = offsetX; x <= offsetX + state.logicalWidth * scaleFactor; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, offsetY);
+    ctx.lineTo(x, offsetY + state.logicalHeight * scaleFactor);
+    ctx.stroke();
+  }
+  for (let y = offsetY; y <= offsetY + state.logicalHeight * scaleFactor; y += step) {
+    ctx.beginPath();
+    ctx.moveTo(offsetX, y);
+    ctx.lineTo(offsetX + state.logicalWidth * scaleFactor, y);
+    ctx.stroke();
+  }
+}
+
+function drawAllEdgesLight(nodes) {
+  ctx.strokeStyle = FAINT_EDGE;
+  ctx.lineWidth = 0.7;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      ctx.beginPath();
+      ctx.moveTo(tx(nodes[i].x), ty(nodes[i].y));
+      ctx.lineTo(tx(nodes[j].x), ty(nodes[j].y));
+      ctx.stroke();
+    }
+  }
+}
+
+function drawEdge(from, to, opts) {
+  const {
+    color = "#1c1a15", width = 2, dashed = false,
+    label = null, offset = 0, arrow = false,
+  } = opts;
+
+  const x1 = tx(from.x), y1 = ty(from.y);
+  const x2 = tx(to.x),   y2 = ty(to.y);
+
+  let ox = 0, oy = 0;
+  if (offset !== 0) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    ox = -dy / len * offset;
+    oy =  dx / len * offset;
+  }
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  if (dashed) ctx.setLineDash([7, 5]); else ctx.setLineDash([]);
+
+  const sx = x1 + ox, sy = y1 + oy;
+  const ex = x2 + ox, ey = y2 + oy;
+
+  const nr = ts(17);
+  const dx = ex - sx, dy = ey - sy;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const ax = sx + ux * nr, ay = sy + uy * nr;
+  const bx = ex - ux * nr, by = ey - uy * nr;
+
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+  ctx.stroke();
+
+  if (arrow) {
+    const ah = 9;
+    const angle = Math.atan2(dy, dx);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx - ah * Math.cos(angle - Math.PI / 7),
+               by - ah * Math.sin(angle - Math.PI / 7));
+    ctx.lineTo(bx - ah * Math.cos(angle + Math.PI / 7),
+               by - ah * Math.sin(angle + Math.PI / 7));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (label !== null && label !== undefined) {
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    const lx = mx + (-uy) * 10;
+    const ly = my + ( ux) * 10;
+    ctx.setLineDash([]);
+    ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const padX = 4, padY = 2;
+    const metrics = ctx.measureText(label);
+    const bw = metrics.width + padX * 2;
+    const bh = 14;
+    ctx.fillStyle = LABEL_BG;
+    ctx.strokeStyle = LABEL_STROKE;
+    ctx.lineWidth = 0.8;
+    roundRect(ctx, lx - bw / 2, ly - bh / 2, bw, bh, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fillText(label, lx, ly);
+  }
+
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawNode(node) {
+  const x = tx(node.x), y = ty(node.y);
+  const r = ts(17);
+  ctx.save();
+
+  // subtle drop shadow like printed ink
+  ctx.shadowColor = "rgba(0,0,0,0.12)";
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 1;
+
+  ctx.fillStyle = node.color || "#2b2a26";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  ctx.strokeStyle = node.border || "#1c1a15";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // highlight ring for active nodes
+  if (node.highlight) {
+    ctx.strokeStyle = node.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // node label — serif small-caps
+  ctx.fillStyle = "#faf4e4";
+  const fs = Math.max(11, Math.floor(ts(14)));
+  ctx.font = `500 ${fs}px 'EB Garamond', Georgia, serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(node.id), x, y + 1);
+  ctx.restore();
+}
+
+/* ==========================================================================
+   Step rendering
+   ========================================================================== */
+function drawStep(step) {
+  drawBackground();
+  if (state.nodes.length > 0) drawAllEdgesLight(state.nodes);
+  if (!step) return;
+
+  const posById = {};
+  step.nodes.forEach(n => posById[n.id] = n);
+
+  for (const e of step.edges) {
+    const from = posById[e.from];
+    const to = posById[e.to];
+    if (!from || !to) continue;
+    drawEdge(from, to, e);
+  }
+  for (const n of step.nodes) drawNode(n);
+}
+
+function drawInitial() {
+  drawBackground();
+  if (state.nodes.length === 0) return;
+  drawAllEdgesLight(state.nodes);
+  for (const n of state.nodes) {
+    drawNode({
+      id: n.id, x: n.x, y: n.y,
+      color: "#2b2a26", border: "#1c1a15", highlight: false,
+    });
+  }
+}
+
+function redraw() {
+  if (state.steps.length > 0 && state.currentStep < state.steps.length) {
+    drawStep(state.steps[state.currentStep]);
+  } else {
+    drawInitial();
+  }
+}
+
+/* ==========================================================================
+   UI wiring
+   ========================================================================== */
+const nodeSlider = document.getElementById("nodeSlider");
+const nodeValue  = document.getElementById("nodeValue");
+const genBtn     = document.getElementById("genBtn");
+const algoSelect = document.getElementById("algoSelect");
+const runBtn     = document.getElementById("runBtn");
+const prevBtn    = document.getElementById("prevBtn");
+const nextBtn    = document.getElementById("nextBtn");
+const autoBtn    = document.getElementById("autoBtn");
+const downloadBtn = document.getElementById("downloadBtn");
+const speedSlider = document.getElementById("speedSlider");
+const speedValue = document.getElementById("speedValue");
+const stepCounter = document.getElementById("stepCounter");
+const stepTitle  = document.getElementById("stepTitle");
+const stepDesc   = document.getElementById("stepDesc");
+const figureCap  = document.getElementById("figureCaption");
+const statsBox   = document.getElementById("statsBox");
+
+nodeSlider.addEventListener("input", () => nodeValue.textContent = nodeSlider.value);
+speedSlider.addEventListener("input", () => {
+  state.speedMs = parseInt(speedSlider.value, 10);
+  speedValue.textContent = (state.speedMs / 1000).toFixed(1) + " s";
+  if (state.autoPlayInterval) {
+    clearInterval(state.autoPlayInterval);
+    state.autoPlayInterval = setInterval(autoTick, state.speedMs);
+  }
+});
+
+genBtn.addEventListener("click", generateGraph);
+runBtn.addEventListener("click", runAlgorithm);
+prevBtn.addEventListener("click", prevStep);
+nextBtn.addEventListener("click", nextStep);
+autoBtn.addEventListener("click", toggleAutoPlay);
+downloadBtn.addEventListener("click", downloadSnapshot);
+algoSelect.addEventListener("change", () => { state.algorithm = algoSelect.value; });
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key === "ArrowRight") nextStep();
+  else if (e.key === "ArrowLeft") prevStep();
+  else if (e.key === " ") { toggleAutoPlay(); e.preventDefault(); }
+});
+
+/* ==========================================================================
+   Fetch operations
+   ========================================================================== */
+async function generateGraph() {
+  stopAutoPlay();
+  const n = parseInt(nodeSlider.value, 10);
+  genBtn.disabled = true;
+  genBtn.textContent = "Sampling…";
+  try {
+    const res = await fetch("/generate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ n }),
+    });
+    const data = await res.json();
+    state.nodes = data.nodes;
+    state.edges = data.edges;
+    state.steps = [];
+    state.currentStep = 0;
+    runBtn.disabled = false;
+    updateStepUI();
+    stepTitle.textContent = `Instance sampled. n = ${state.nodes.length}.`;
+    stepDesc.textContent =
+      `A random Euclidean point set of n = ${state.nodes.length} vertices was drawn. ` +
+      `The complete metric graph K_n is rendered faintly beneath the active overlays. ` +
+      `Proceed to §II to select a heuristic.`;
+    clearStats();
+    figureCap.innerHTML = `<b>Fig. 1.</b> Random Euclidean instance; n = ${state.nodes.length}. Faint lines trace K<sub>n</sub>.`;
+    redraw();
+  } catch (err) {
+    console.error(err);
+    stepTitle.textContent = "Error generating graph";
+    stepDesc.textContent = String(err);
+  } finally {
+    genBtn.disabled = false;
+    genBtn.textContent = "Sample a random instance";
+  }
+}
+
+async function runAlgorithm() {
+  stopAutoPlay();
+  runBtn.disabled = true;
+  runBtn.textContent = "Running…";
+  try {
+    const res = await fetch("/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ algorithm: algoSelect.value }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    state.steps = data.steps;
+    state.currentStep = 0;
+    updateStepUI();
+    const algoLabel = algoSelect.options[algoSelect.selectedIndex].text;
+    figureCap.innerHTML = `<b>Fig. 2.</b> ${algoLabel} on n = ${state.nodes.length} vertices. Step-by-step execution.`;
+    showStep(0);
+  } catch (err) {
+    console.error(err);
+    stepTitle.textContent = "Error running algorithm";
+    stepDesc.textContent = String(err);
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = "Run";
+  }
+}
+
+/* ==========================================================================
+   Step navigation
+   ========================================================================== */
+function fadeAndDraw(drawFn) {
+  canvas.classList.add("fading");
+  setTimeout(() => {
+    drawFn();
+    canvas.classList.remove("fading");
+  }, 140);
+}
+function showStep(index) {
+  if (index < 0 || index >= state.steps.length) return;
+  state.currentStep = index;
+  fadeAndDraw(() => drawStep(state.steps[index]));
+  updateInfoPanel(state.steps[index]);
+  updateStepUI();
+}
+function nextStep() {
+  if (state.currentStep < state.steps.length - 1) showStep(state.currentStep + 1);
+  else stopAutoPlay();
+}
+function prevStep() {
+  if (state.currentStep > 0) showStep(state.currentStep - 1);
+}
+function toggleAutoPlay() {
+  if (state.steps.length === 0) return;
+  if (state.autoPlayInterval) stopAutoPlay();
+  else startAutoPlay();
+}
+function startAutoPlay() {
+  autoBtn.textContent = "▪ Pause";
+  if (state.currentStep >= state.steps.length - 1) {
+    state.currentStep = 0;
+    showStep(0);
+  }
+  state.autoPlayInterval = setInterval(autoTick, state.speedMs);
+}
+function stopAutoPlay() {
+  if (state.autoPlayInterval) {
+    clearInterval(state.autoPlayInterval);
+    state.autoPlayInterval = null;
+  }
+  autoBtn.textContent = "▸ Auto-play";
+}
+function autoTick() {
+  if (state.currentStep >= state.steps.length - 1) { stopAutoPlay(); return; }
+  nextStep();
+}
+
+/* ==========================================================================
+   UI sync
+   ========================================================================== */
+function updateStepUI() {
+  if (state.steps.length === 0) {
+    stepCounter.textContent = "step —  of  —";
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    autoBtn.disabled = true;
+    downloadBtn.disabled = state.nodes.length === 0;
+    return;
+  }
+  stepCounter.textContent = `step ${state.currentStep + 1}  of  ${state.steps.length}`;
+  prevBtn.disabled = state.currentStep <= 0;
+  nextBtn.disabled = state.currentStep >= state.steps.length - 1;
+  autoBtn.disabled = false;
+  downloadBtn.disabled = false;
+}
+
+function downloadSnapshot() {
+  if (state.nodes.length === 0) return;
+  const algo = algoSelect.value;
+  const stepNum = state.steps.length > 0 ? (state.currentStep + 1) : 0;
+  const total   = state.steps.length;
+  const nNodes  = state.nodes.length;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const fname = total > 0
+    ? `tsp_${algo}_n${nNodes}_step${stepNum}of${total}_${stamp}.png`
+    : `tsp_instance_n${nNodes}_${stamp}.png`;
+  const url = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function renderStats(rows) {
+  statsBox.innerHTML = "";
+  if (!rows || rows.length === 0) {
+    statsBox.innerHTML = '<div class="k" style="grid-column: 1 / -1; color: var(--muted); font-style: italic;">— no measurements yet —</div>';
+    return;
+  }
+  for (const row of rows) {
+    const k = document.createElement("div");
+    k.className = "k";
+    k.textContent = row.label;
+    const v = document.createElement("div");
+    v.className = "v";
+    v.textContent = (row.value === null || row.value === undefined) ? "—" : row.value;
+    statsBox.appendChild(k);
+    statsBox.appendChild(v);
+  }
+}
+function updateInfoPanel(step) {
+  if (!step) return;
+  stepTitle.textContent = step.title;
+  stepDesc.textContent = step.description;
+  renderStats(step.stats || []);
+}
+function clearStats() { renderStats([]); }
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+window.addEventListener("DOMContentLoaded", () => {
+  resizeCanvas();
+  state.algorithm = algoSelect.value;
+  state.speedMs = parseInt(speedSlider.value, 10);
+  speedValue.textContent = (state.speedMs / 1000).toFixed(1) + " s";
+  generateGraph();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Empirical Study of TSP Approximation Heuristics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:      #f3ecdc;
+    --paper-2:    #ebe1c9;
+    --card:       #faf4e4;
+    --ink:        #1c1a15;
+    --ink-soft:   #3a362d;
+    --muted:      #6e6655;
+    --rule:       #a79977;
+    --rule-soft:  #c7ba9a;
+    --blue:       #1e4d8c;
+    --green:      #2f5d3e;
+    --orange:     #9c4a1b;
+    --purple:     #5d3a8c;
+    --red:        #8b1a1a;
+    --chart-bg:   #faf4e4;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "EB Garamond", Georgia, "Times New Roman", serif;
+    font-size: 16px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(180,160,110,0.08), transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(160,140,100,0.07), transparent 40%);
+    pointer-events: none; z-index: 0;
+  }
+  .app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: 100vh; width: 100vw;
+  }
+  .panel {
+    background: var(--paper-2);
+    border-right: 1.5px solid var(--rule);
+    padding: 26px 28px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .panel::-webkit-scrollbar { width: 8px; }
+  .panel::-webkit-scrollbar-thumb { background: var(--rule-soft); border-radius: 4px; }
+
+  .masthead {
+    border-bottom: 2px double var(--rule);
+    padding-bottom: 14px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-family: "EB Garamond", Georgia, serif;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 1.15;
+    margin: 0;
+    color: var(--ink);
+  }
+  h1 em { font-style: italic; font-weight: 400; }
+
+  .section {
+    background: var(--card);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 16px 18px 18px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+  }
+  .section h2 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    margin: 0 0 12px 0;
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 6px;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+    font-style: italic;
+  }
+
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none; appearance: none;
+    height: 3px;
+    background: var(--rule-soft);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--paper-2);
+    cursor: pointer;
+  }
+  input[type=range]:disabled { opacity: 0.5; }
+
+  button {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 14.5px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 2px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 120ms, color 120ms, transform 80ms;
+  }
+  button:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.38; cursor: not-allowed; }
+  button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  button.primary:hover:not(:disabled) { background: var(--ink-soft); border-color: var(--ink-soft); }
+  button.danger {
+    background: var(--paper);
+    color: var(--red);
+    border: 1.5px solid var(--red);
+    font-variant: small-caps;
+    letter-spacing: 0.05em;
+  }
+  button.danger:hover:not(:disabled) { background: var(--red); color: var(--paper); }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input { flex: 1; }
+  .slider-value {
+    min-width: 38px; text-align: right;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px; color: var(--ink);
+  }
+
+  .progress-bar {
+    width: 100%; height: 4px;
+    background: var(--paper); border: 1px solid var(--rule-soft);
+    border-radius: 1px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--ink);
+    width: 0%;
+    transition: width 120ms ease;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1.3fr 0.9fr 0.7fr;
+    gap: 5px 10px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+  }
+  .stats-grid .algo-k {
+    color: var(--ink); font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 13px;
+  }
+  .stats-grid .header {
+    color: var(--muted);
+    font-variant: small-caps;
+    letter-spacing: 0.08em;
+    font-size: 10.5px;
+    text-align: right;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 3px;
+  }
+  .stats-grid .header.first { text-align: left; }
+  .swatch {
+    display: inline-block;
+    width: 12px; height: 3px;
+    vertical-align: middle;
+  }
+  .stats-grid .val {
+    color: var(--ink); text-align: right;
+  }
+
+  .back-link {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 13px; font-style: italic;
+    color: var(--muted); text-decoration: none;
+    display: inline-block;
+    margin-bottom: 4px;
+  }
+  .back-link:hover { color: var(--ink); }
+
+  .chart-area {
+    padding: 32px 40px;
+    display: flex; flex-direction: column; gap: 28px;
+    overflow-y: auto;
+  }
+  .chart-area::-webkit-scrollbar { width: 8px; }
+  .chart-area::-webkit-scrollbar-thumb { background: var(--rule-soft); }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 22px 26px 20px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+  }
+  .chart-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .chart-title {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 19px;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--ink);
+    margin: 0 0 4px 0;
+    line-height: 1.25;
+  }
+  .chart-sub {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 10px;
+  }
+  .chart-legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 10px;
+  }
+  .chart-legend .lg { display: flex; align-items: center; gap: 6px; }
+  .chart-legend .sw { width: 16px; height: 2px; }
+  canvas {
+    display: block;
+    width: 100%;
+    background: var(--chart-bg);
+    border: 1px solid var(--rule-soft);
+    border-radius: 2px;
+    margin-top: 4px;
+  }
+  .figure-caption {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 8px;
+  }
+  .figure-caption b {
+    font-style: normal;
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <div class="masthead">
+      <a class="back-link" href="/">← back to monograph</a>
+      <div class="eyebrow">Chapter II · Empirical Study</div>
+      <h1>On the <em>Average-Case Behaviour</em> of TSP Heuristics</h1>
+    </div>
+
+    <div class="section">
+      <h2>§ Experimental Parameters</h2>
+      <label for="roundsSlider">Number of trials t</label>
+      <div class="slider-row">
+        <input id="roundsSlider" type="range" min="5" max="350" value="30" step="5" />
+        <div class="slider-value" id="roundsValue">30</div>
+      </div>
+      <div style="height:12px"></div>
+      <label for="nodesSlider">Instance size n</label>
+      <div class="slider-row">
+        <input id="nodesSlider" type="range" min="5" max="20" value="10" step="1" />
+        <div class="slider-value" id="nodesValue">10</div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px;font-style:italic;line-height:1.45">
+        n ≤ 20 since the exact optimum is obtained via Held–Karp dynamic
+        programming in O(n²·2ⁿ); at n = 20 each trial takes a few seconds.
+      </div>
+      <div style="height:12px"></div>
+      <button id="startBtn" class="primary">Begin trials</button>
+      <div style="height:6px"></div>
+      <button id="stopBtn" class="danger" disabled>Halt</button>
+      <div style="height:6px"></div>
+      <button id="downloadBtn" disabled>⤓ Download results (PNG + CSV)</button>
+    </div>
+
+    <div class="section">
+      <h2>§ Progress</h2>
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-bottom:8px;font-style:italic">
+        <span id="progText">idle</span>
+        <span id="elapsedText" style="font-family:'IBM Plex Mono',monospace;font-style:normal;color:var(--ink)">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    </div>
+
+    <div class="section">
+      <h2>§ Current Running Means</h2>
+      <div class="stats-grid" id="avgGrid"></div>
+    </div>
+  </aside>
+
+  <main class="chart-area">
+    <div class="chart-card">
+      <div class="chart-label">Figure 1</div>
+      <div class="chart-title">Average wall-clock runtime, T̄<sub>t</sub></div>
+      <div class="chart-sub">Cumulative mean, in milliseconds, of the per-trial wall-clock time spent by each heuristic, plotted against the trial index t.</div>
+      <canvas id="chartRuntime" height="320"></canvas>
+      <div class="figure-caption" id="capRuntime"><b>Fig. 1.</b> Running mean of T<sub>t</sub>(A) = wall-clock time of algorithm A on trial t, averaged over t₁…t.</div>
+      <div class="chart-legend" id="legendRuntime"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">Figure 2</div>
+      <div class="chart-title">Empirical approximation ratio, ᾱ<sub>t</sub></div>
+      <div class="chart-sub">Cumulative mean of α(A,I) = ℓ(A(I)) / OPT(I), with OPT obtained exactly by Held–Karp. The dashed rule marks the optimal regime α = 1.</div>
+      <canvas id="chartRatio" height="320"></canvas>
+      <div class="figure-caption" id="capRatio"><b>Fig. 2.</b> Running mean of α(A, I<sub>t</sub>) with I<sub>t</sub> ∼ U(random Euclidean instances of size n).</div>
+      <div class="chart-legend" id="legendRatio"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ==========================================================================
+   Constants — academic palette
+   ========================================================================== */
+const ALGOS = [
+  { key: "nn",           label: "Nearest Neighbor",              color: "#1e4d8c" },
+  { key: "mst",          label: "MST 2-Approximation",           color: "#2f5d3e" },
+  { key: "christofides", label: "Christofides–Serdyukov",        color: "#5d3a8c" },
+  { key: "ni",           label: "Nearest Insertion",             color: "#9c4a1b" },
+];
+const INK = "#1c1a15";
+const MUTED = "#6e6655";
+const RULE_SOFT = "#c7ba9a";
+const PAPER = "#faf4e4";
+
+/* ==========================================================================
+   DOM refs
+   ========================================================================== */
+const roundsSlider = document.getElementById("roundsSlider");
+const roundsValue  = document.getElementById("roundsValue");
+const nodesSlider  = document.getElementById("nodesSlider");
+const nodesValue   = document.getElementById("nodesValue");
+const startBtn     = document.getElementById("startBtn");
+const stopBtn      = document.getElementById("stopBtn");
+const downloadBtn  = document.getElementById("downloadBtn");
+const progText     = document.getElementById("progText");
+const elapsedText  = document.getElementById("elapsedText");
+const progFill     = document.getElementById("progFill");
+const avgGrid      = document.getElementById("avgGrid");
+const legendRuntime = document.getElementById("legendRuntime");
+const legendRatio   = document.getElementById("legendRatio");
+const canvasRuntime = document.getElementById("chartRuntime");
+const canvasRatio   = document.getElementById("chartRatio");
+
+/* ==========================================================================
+   State
+   ========================================================================== */
+const sim = {
+  running: false,
+  aborted: false,
+  totalRounds: 30,
+  currentRound: 0,
+  nodes: 10,
+  startedAt: 0,
+  meanRuntime: { nn: [], mst: [], christofides: [], ni: [] },
+  meanRatio:   { nn: [], mst: [], christofides: [], ni: [] },
+  sumRuntime:  { nn: 0, mst: 0, christofides: 0, ni: 0 },
+  sumRatio:    { nn: 0, mst: 0, christofides: 0, ni: 0 },
+};
+
+roundsSlider.addEventListener("input", () => roundsValue.textContent = roundsSlider.value);
+nodesSlider.addEventListener("input",  () => nodesValue.textContent  = nodesSlider.value);
+startBtn.addEventListener("click", startSimulation);
+stopBtn.addEventListener("click",  stopSimulation);
+downloadBtn.addEventListener("click", downloadResults);
+
+/* ==========================================================================
+   Legend + running-means table
+   ========================================================================== */
+function renderLegends() {
+  const makeLegend = (container) => {
+    container.innerHTML = "";
+    for (const a of ALGOS) {
+      const el = document.createElement("div");
+      el.className = "lg";
+      el.innerHTML = `<span class="sw" style="background:${a.color}"></span>${a.label}`;
+      container.appendChild(el);
+    }
+  };
+  makeLegend(legendRuntime);
+  makeLegend(legendRatio);
+}
+function renderAvgGrid() {
+  avgGrid.innerHTML = "";
+  const hA = document.createElement("div"); hA.className = "header first"; hA.textContent = "Algorithm";
+  const h1 = document.createElement("div"); h1.className = "header"; h1.innerHTML = "T̄ (ms)";
+  const h2 = document.createElement("div"); h2.className = "header"; h2.innerHTML = "ᾱ";
+  avgGrid.appendChild(hA); avgGrid.appendChild(h1); avgGrid.appendChild(h2);
+
+  for (const a of ALGOS) {
+    const k = document.createElement("div");
+    k.className = "algo-k";
+    k.innerHTML = `<span class="swatch" style="background:${a.color}"></span>${a.label}`;
+    const rtArr = sim.meanRuntime[a.key];
+    const raArr = sim.meanRatio[a.key];
+    const rt = rtArr.length ? rtArr[rtArr.length - 1].toFixed(3) : "—";
+    const ra = raArr.length ? raArr[raArr.length - 1].toFixed(4) : "—";
+    const v1 = document.createElement("div"); v1.className = "val"; v1.textContent = rt;
+    const v2 = document.createElement("div"); v2.className = "val"; v2.textContent = ra;
+    avgGrid.appendChild(k); avgGrid.appendChild(v1); avgGrid.appendChild(v2);
+  }
+}
+
+/* ==========================================================================
+   Chart drawing — "published figure" style
+   ========================================================================== */
+function resizeCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  canvas.width  = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+function drawChart(canvas, series, opts) {
+  const ctx = resizeCanvas(canvas);
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  const padL = 60, padR = 24, padT = 20, padB = 38;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  // Background
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, W, H);
+
+  const totalRounds = sim.totalRounds;
+  const xMin = 1, xMax = Math.max(totalRounds, 2);
+  let yMin = Infinity, yMax = -Infinity;
+  for (const s of series) {
+    for (const y of s.data) {
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+    }
+  }
+  if (!isFinite(yMin) || !isFinite(yMax)) { yMin = 0; yMax = 1; }
+  if (yMin === yMax) { yMin -= 0.5; yMax += 0.5; }
+  const span = yMax - yMin;
+  yMin -= span * 0.10;
+  yMax += span * 0.10;
+  if (opts.yMinFloor !== undefined && yMin < opts.yMinFloor) yMin = opts.yMinFloor;
+
+  // Grid
+  ctx.strokeStyle = "rgba(28,26,21,0.07)";
+  ctx.lineWidth = 0.8;
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const y = padT + plotH * (i / yTicks);
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + plotW, y);
+    ctx.stroke();
+  }
+
+  // y-axis tick labels
+  ctx.fillStyle = MUTED;
+  ctx.font = "11px 'IBM Plex Mono', ui-monospace, Menlo, monospace";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "right";
+  for (let i = 0; i <= yTicks; i++) {
+    const y = padT + plotH * (i / yTicks);
+    const val = yMax - (yMax - yMin) * (i / yTicks);
+    ctx.fillText(opts.yFormat(val), padL - 8, y);
+  }
+
+  // x-axis tick labels
+  const xTicks = Math.min(10, Math.max(2, totalRounds));
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for (let i = 0; i <= xTicks; i++) {
+    const t = i / xTicks;
+    const x = padL + plotW * t;
+    ctx.strokeStyle = "rgba(28,26,21,0.3)";
+    ctx.beginPath();
+    ctx.moveTo(x, padT + plotH);
+    ctx.lineTo(x, padT + plotH + 4);
+    ctx.stroke();
+    const xVal = Math.round(xMin + (xMax - xMin) * t);
+    ctx.fillText(String(xVal), x, padT + plotH + 7);
+  }
+
+  // Axis lines
+  ctx.strokeStyle = "rgba(28,26,21,0.55)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT);
+  ctx.lineTo(padL, padT + plotH);
+  ctx.lineTo(padL + plotW, padT + plotH);
+  ctx.stroke();
+
+  // Axis labels (serif, italic)
+  ctx.fillStyle = INK;
+  ctx.font = "italic 13px 'EB Garamond', Georgia, serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(opts.xLabel || "trial index  t", padL + plotW / 2, H - 6);
+
+  ctx.save();
+  ctx.translate(16, padT + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = "top";
+  ctx.fillText(opts.yLabel, 0, 0);
+  ctx.restore();
+
+  // Reference line
+  if (opts.refY !== undefined && opts.refY >= yMin && opts.refY <= yMax) {
+    const y = padT + plotH * (1 - (opts.refY - yMin) / (yMax - yMin));
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = "rgba(28,26,21,0.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + plotW, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = INK;
+    ctx.font = "italic 11px 'EB Garamond', Georgia, serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(" α = 1 (optimal)", padL + 6, y - 2);
+  }
+
+  // Series
+  for (const s of series) {
+    if (s.data.length === 0) continue;
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 1.7;
+    ctx.beginPath();
+    for (let i = 0; i < s.data.length; i++) {
+      const xVal = i + 1;
+      const x = padL + plotW * ((xVal - xMin) / (xMax - xMin));
+      const y = padT + plotH * (1 - (s.data[i] - yMin) / (yMax - yMin));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // final marker: small open circle (academic style)
+    const i = s.data.length - 1;
+    const xVal = i + 1;
+    const x = padL + plotW * ((xVal - xMin) / (xMax - xMin));
+    const y = padT + plotH * (1 - (s.data[i] - yMin) / (yMax - yMin));
+    ctx.fillStyle = PAPER;
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+function redrawCharts() {
+  const rtSeries = ALGOS.map(a => ({ color: a.color, data: sim.meanRuntime[a.key] }));
+  const raSeries = ALGOS.map(a => ({ color: a.color, data: sim.meanRatio[a.key] }));
+  drawChart(canvasRuntime, rtSeries, {
+    yLabel: "mean runtime  T̄  (ms)",
+    yFormat: v => v.toFixed(2),
+    yMinFloor: 0,
+  });
+  drawChart(canvasRatio, raSeries, {
+    yLabel: "mean ratio  ᾱ",
+    yFormat: v => v.toFixed(3),
+    refY: 1.0,
+  });
+}
+
+/* ==========================================================================
+   Simulation loop
+   ========================================================================== */
+async function startSimulation() {
+  if (sim.running) return;
+  sim.running = true;
+  sim.aborted = false;
+  sim.totalRounds = parseInt(roundsSlider.value, 10);
+  sim.nodes       = parseInt(nodesSlider.value, 10);
+  sim.currentRound = 0;
+  sim.startedAt = performance.now();
+  for (const key of Object.keys(sim.meanRuntime)) {
+    sim.meanRuntime[key] = [];
+    sim.meanRatio[key]   = [];
+    sim.sumRuntime[key]  = 0;
+    sim.sumRatio[key]    = 0;
+  }
+  startBtn.disabled = true;
+  stopBtn.disabled  = false;
+  downloadBtn.disabled = true;
+  roundsSlider.disabled = true;
+  nodesSlider.disabled  = true;
+  renderAvgGrid();
+  redrawCharts();
+  updateProgress();
+
+  for (let r = 1; r <= sim.totalRounds; r++) {
+    if (sim.aborted) break;
+    try {
+      const res = await fetch("/sim_round", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ n: sim.nodes }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      sim.currentRound = r;
+      for (const algo of ALGOS) {
+        const rec = data.results[algo.key];
+        sim.sumRuntime[algo.key] += rec.time_ms;
+        sim.sumRatio[algo.key]   += rec.ratio;
+        sim.meanRuntime[algo.key].push(sim.sumRuntime[algo.key] / r);
+        sim.meanRatio[algo.key].push(sim.sumRatio[algo.key] / r);
+      }
+      redrawCharts();
+      renderAvgGrid();
+      updateProgress();
+      await new Promise(requestAnimationFrame);
+    } catch (err) {
+      console.error(err);
+      progText.textContent = "error: " + err.message;
+      break;
+    }
+  }
+
+  sim.running = false;
+  startBtn.disabled = false;
+  stopBtn.disabled  = true;
+  roundsSlider.disabled = false;
+  nodesSlider.disabled  = false;
+  // Enable download as long as we have at least one completed trial.
+  downloadBtn.disabled = sim.currentRound === 0;
+  if (sim.aborted) {
+    progText.textContent = `halted at trial ${sim.currentRound} of ${sim.totalRounds}`;
+  } else {
+    progText.textContent = `completed · ${sim.totalRounds} trials · n = ${sim.nodes}`;
+  }
+}
+
+/* ==========================================================================
+   Download: PNG of each figure + CSV of per-trial running means
+   ========================================================================== */
+function triggerDownload(dataUrl, filename) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function canvasToPng(canvas) {
+  // Re-render onto an offscreen canvas so the PNG has the opaque paper
+  // background even though the on-screen canvas inherits from CSS.
+  const off = document.createElement("canvas");
+  off.width = canvas.width;
+  off.height = canvas.height;
+  const octx = off.getContext("2d");
+  octx.fillStyle = PAPER;
+  octx.fillRect(0, 0, off.width, off.height);
+  octx.drawImage(canvas, 0, 0);
+  return off.toDataURL("image/png");
+}
+
+function buildCsv() {
+  // One row per completed trial, columns: t, <algo>_time_ms, <algo>_ratio
+  const rows = [];
+  const header = ["trial_t"];
+  for (const a of ALGOS) {
+    header.push(`${a.key}_mean_time_ms`);
+    header.push(`${a.key}_mean_ratio`);
+  }
+  rows.push(header.join(","));
+  const T = sim.currentRound;
+  for (let i = 0; i < T; i++) {
+    const cells = [String(i + 1)];
+    for (const a of ALGOS) {
+      const rt = sim.meanRuntime[a.key][i];
+      const ra = sim.meanRatio[a.key][i];
+      cells.push(rt === undefined ? "" : rt.toFixed(6));
+      cells.push(ra === undefined ? "" : ra.toFixed(6));
+    }
+    rows.push(cells.join(","));
+  }
+  return rows.join("\n") + "\n";
+}
+
+function downloadResults() {
+  if (sim.currentRound === 0) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const tag   = `n${sim.nodes}_t${sim.currentRound}_${stamp}`;
+
+  triggerDownload(canvasToPng(canvasRuntime), `tsp_sim_runtime_${tag}.png`);
+  setTimeout(() => {
+    triggerDownload(canvasToPng(canvasRatio), `tsp_sim_ratio_${tag}.png`);
+  }, 160);
+  setTimeout(() => {
+    const csv = buildCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    triggerDownload(url, `tsp_sim_data_${tag}.csv`);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }, 320);
+}
+
+function stopSimulation() {
+  if (!sim.running) return;
+  sim.aborted = true;
+}
+
+function updateProgress() {
+  const pct = sim.totalRounds > 0 ? (sim.currentRound / sim.totalRounds) * 100 : 0;
+  progFill.style.width = pct + "%";
+  if (sim.running) {
+    progText.textContent = `trial ${sim.currentRound} of ${sim.totalRounds} · n = ${sim.nodes}`;
+  }
+  const elapsed = (performance.now() - sim.startedAt) / 1000;
+  elapsedText.textContent = elapsed.toFixed(1) + " s";
+}
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+window.addEventListener("resize", redrawCharts);
+window.addEventListener("DOMContentLoaded", () => {
+  renderLegends();
+  renderAvgGrid();
+  redrawCharts();
+});
+</script>
+</body>
+</html>
