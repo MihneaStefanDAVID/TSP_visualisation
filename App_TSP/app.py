@@ -937,6 +937,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     data = request.get_json(silent=True) or {}
@@ -989,9 +994,27 @@ def generate():
 
 @app.route("/run", methods=["POST"])
 def run():
-    if not state["nodes"]:
-        return jsonify({"error": "no graph generated"}), 400
     data = request.get_json(silent=True) or {}
+    nodes = data.get("nodes") or []
+    if len(nodes) < 3 or len(nodes) > 30:
+        return jsonify({"error": "generate a graph with 3 to 30 nodes first"}), 400
+
+    try:
+        normalized_nodes = [
+            {"id": index, "x": float(node["x"]), "y": float(node["y"])}
+            for index, node in enumerate(nodes)
+        ]
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "invalid graph data"}), 400
+
+    # The browser sends its own graph with every run. With the production
+    # server configured as a single worker, each request gets an isolated
+    # snapshot instead of depending on whichever visitor generated last.
+    state["nodes"] = normalized_nodes
+    state["dist"] = build_distance_matrix(normalized_nodes)
+    state["optimal_cost"] = data.get("optimal_cost")
+    state["optimal_exact"] = bool(data.get("optimal_exact"))
+
     algo = data.get("algorithm", "nn")
 
     if algo == "nn":

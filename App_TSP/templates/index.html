@@ -418,6 +418,8 @@
 const state = {
   nodes: [],
   edges: [],
+  optimalCost: null,
+  optimalExact: false,
   steps: [],
   currentStep: 0,
   autoPlayInterval: null,
@@ -748,6 +750,8 @@ async function generateGraph() {
     const data = await res.json();
     state.nodes = data.nodes;
     state.edges = data.edges;
+    state.optimalCost = data.optimal_cost;
+    state.optimalExact = data.optimal_exact;
     state.steps = [];
     state.currentStep = 0;
     runBtn.disabled = false;
@@ -778,7 +782,12 @@ async function runAlgorithm() {
     const res = await fetch("/run", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ algorithm: algoSelect.value }),
+      body: JSON.stringify({
+        algorithm: algoSelect.value,
+        nodes: state.nodes,
+        optimal_cost: state.optimalCost,
+        optimal_exact: state.optimalExact,
+      }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
